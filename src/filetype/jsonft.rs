@@ -7,8 +7,8 @@ pub struct JsonFileType {
 }
 
 impl JsonFileType {
-    pub fn new(json_data: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let json: sj_value = serde_json::from_str(json_data)?;
+    pub fn new(file: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let json: sj_value = serde_json::from_str(file)?;
 
         Ok(Self { json })
     }

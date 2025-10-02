@@ -1,9 +1,9 @@
 use crate::state::StateObject;
 
-pub mod csvft;
-pub mod jsonft;
+mod csvft;
+mod jsonft;
 
-pub use csvft::CSVFileType;
+pub use csvft::{CsvFileType, CsvOptions};
 pub use jsonft::JsonFileType;
 
 pub trait Filetype {

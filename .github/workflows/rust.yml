@@ -1,0 +1,53 @@
+name: Rust Build
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  TAG: ${{ github.ref_name }}
+  CARGO_TERM_COLOR: always
+  
+jobs:
+  make_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        run: |
+          gh release create "$TAG" \
+            --repo="$GITHUB_REPOSITORY" \
+            --title="Release $TAG" \
+            --generate-notes
+
+  build_linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    needs: make_release
+    steps:
+      - uses: actions/checkout@v5
+      - id: linux_build
+        name: Build Linux Release Binaries
+        run: |
+          cargo build --profile release
+          name="tabby_${TAG//./_}_linux"
+          echo "Uploading $name"
+          mv "target/release/tabby" "target/release/$name"
+          gh release upload "$TAG" "target/release/$name"
+
+  build_mac:
+    name: Build MacOS
+    runs-on: macos-latest
+    needs: make_release
+    steps:
+      - uses: actions/checkout@v5
+      - id: macos_build
+        name: Build MacOS Release Binaries
+        run: |
+          cargo build --profile release
+          name="tabby_${TAG//./_}_macos"
+          echo "Uploading $name"
+          mv "target/release/tabby" "target/release/$name"
+          gh release upload "$TAG" "target/release/$name"

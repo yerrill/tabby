@@ -4,10 +4,9 @@ mod state;
 
 use codegen::{Generation, Python};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
-use std::{error::Error, process};
 
 use clap::{Parser, ValueEnum};
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(name = "tabby")]
@@ -32,7 +31,7 @@ pub struct Cli {
 
     /// Optional delimiter for CSV files
     #[arg(long = "delimiter", value_name = "CHAR")]
-    delimiter: Option<u8>,
+    delimiter: Option<char>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -67,5 +66,20 @@ fn main() {
         InputFormat::Json => JsonFileType::new(file.as_str())
             .expect("Unable to parse json")
             .to_object(),
+    };
+
+    let output_code = match cli.output_format {
+        OutputFormat::Python => Python::generate(input_objects),
+    };
+
+    match cli.output {
+        Some(f) => {
+            let _ = std::fs::write(f, output_code).expect("Failed to write output file");
+        }
+        None => {
+            let _ = std::io::stdout()
+                .write_all(output_code.as_bytes())
+                .expect("Failed to write to std out");
+        }
     };
 }

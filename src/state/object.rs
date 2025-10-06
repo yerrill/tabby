@@ -13,6 +13,7 @@ pub enum StateObject {
 }
 
 impl StateObject {
+    #[allow(dead_code)]
     pub fn to_str(&self, indent: usize) -> String {
         let mut output = String::new();
 

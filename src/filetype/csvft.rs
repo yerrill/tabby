@@ -4,12 +4,12 @@ use super::{Filetype, StateObject};
 use crate::state;
 
 pub struct CsvOptions {
-    pub delimiter: u8,
+    pub delimiter: char,
 }
 
 impl CsvOptions {
     pub fn new() -> Self {
-        Self { delimiter: b',' }
+        Self { delimiter: ',' }
     }
 }
 
@@ -21,7 +21,7 @@ impl CsvFileType {
     pub fn new(file: &str, options: CsvOptions) -> Result<Self, Box<dyn Error>> {
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
-            .delimiter(options.delimiter)
+            .delimiter(options.delimiter.try_into()?)
             .from_reader(file.as_bytes());
 
         let mut fields = reader
@@ -56,6 +56,7 @@ impl CsvFileType {
         updated_fields
     }
 
+    #[allow(dead_code)]
     pub fn to_string(&self) -> String {
         let cols = self
             .fields
@@ -84,7 +85,7 @@ impl Filetype for CsvFileType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state;
+    use crate::state::FieldState;
 
     #[test]
     fn change1() {
@@ -95,31 +96,34 @@ mod tests {
             ["", "1.1", ""],
         ];
 
-        let mut fields =
-            CsvFileType::new(table[0].iter().map(|&s| s.to_owned()).collect()).unwrap();
+        let mut fields = vec![
+            (String::from("h1"), FieldState::Unset),
+            (String::from("h2"), FieldState::Unset),
+            (String::from("h3"), FieldState::Unset),
+        ];
 
-        assert!(fields.fields[0] == ("h1".to_owned(), state::FieldState::Unset));
-        assert!(fields.fields[1] == ("h2".to_owned(), state::FieldState::Unset));
-        assert!(fields.fields[2] == ("h3".to_owned(), state::FieldState::Unset));
+        assert!(fields[0] == ("h1".to_owned(), state::FieldState::Unset));
+        assert!(fields[1] == ("h2".to_owned(), state::FieldState::Unset));
+        assert!(fields[2] == ("h3".to_owned(), state::FieldState::Unset));
 
-        fields = fields.update_states(table[1].into_iter());
+        fields = CsvFileType::update_states(fields, table[1].into_iter());
 
-        assert!(fields.fields[0] == ("h1".to_owned(), state::FieldState::Str));
-        assert!(fields.fields[1] == ("h2".to_owned(), state::FieldState::Int));
-        assert!(fields.fields[2] == ("h3".to_owned(), state::FieldState::Bool));
+        assert!(fields[0] == ("h1".to_owned(), state::FieldState::Str));
+        assert!(fields[1] == ("h2".to_owned(), state::FieldState::Int));
+        assert!(fields[2] == ("h3".to_owned(), state::FieldState::Bool));
 
-        fields = fields.update_states(table[2].into_iter());
+        fields = CsvFileType::update_states(fields, table[2].into_iter());
 
-        assert!(fields.fields[0] == ("h1".to_owned(), state::FieldState::Str));
-        assert!(fields.fields[1] == ("h2".to_owned(), state::FieldState::Int));
-        assert!(fields.fields[2] == ("h3".to_owned(), state::FieldState::Bool));
+        assert!(fields[0] == ("h1".to_owned(), state::FieldState::Str));
+        assert!(fields[1] == ("h2".to_owned(), state::FieldState::Int));
+        assert!(fields[2] == ("h3".to_owned(), state::FieldState::Bool));
 
-        fields = fields.update_states(table[3].into_iter());
+        fields = CsvFileType::update_states(fields, table[3].into_iter());
 
-        assert!(fields.fields[0] == ("h1".to_owned(), state::FieldState::StrOrNone));
-        assert!(fields.fields[1] == ("h2".to_owned(), state::FieldState::Float));
-        assert!(fields.fields[2] == ("h3".to_owned(), state::FieldState::BoolOrNone));
+        assert!(fields[0] == ("h1".to_owned(), state::FieldState::StrOrNone));
+        assert!(fields[1] == ("h2".to_owned(), state::FieldState::Float));
+        assert!(fields[2] == ("h3".to_owned(), state::FieldState::BoolOrNone));
 
-        assert!(fields.fields.len() == 3);
+        assert!(fields.len() == 3);
     }
 }

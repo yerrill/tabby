@@ -206,14 +206,15 @@ impl FieldState {
     }
 
     pub fn from_str(data: &str) -> Self {
-        let data = data.trim();
-
-        if data.len() == 0 {
-            return Self::None;
-        }
+        const BOOLLIKE: [&'static str; 4] = ["true", "false", "yes", "no"];
+        const NULLLIKE: [&'static str; 3] = ["null", "none", "nan"];
 
         let lower = data.to_lowercase();
-        const BOOLLIKE: [&'static str; 4] = ["true", "false", "yes", "no"];
+        let data = data.trim();
+
+        if data.len() == 0 || NULLLIKE.contains(&lower.as_str()) {
+            return Self::None;
+        }
 
         if BOOLLIKE.contains(&lower.as_str()) {
             return Self::Bool;
@@ -229,13 +230,6 @@ impl FieldState {
 
         Self::Str
     }
-
-    // pub fn change_self(self, other: Self) -> Self {
-    //     other
-    //         .decompose()
-    //         .into_iter()
-    //         .fold(self, |acc, e| acc.change(e))
-    // }
 }
 
 #[cfg(test)]

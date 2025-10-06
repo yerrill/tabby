@@ -3,28 +3,83 @@ mod filetype;
 mod state;
 
 use codegen::{Generation, Python};
-use filetype::{Filetype, JsonFileType};
-use std::{error::Error, process};
+use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 
-fn example() -> Result<(), Box<dyn Error>> {
-    let file = std::fs::read_to_string("test.json").unwrap();
+use clap::{Parser, ValueEnum};
+use std::{io::Write, path::PathBuf};
 
-    // let file = "[{ \"a\": 1, \"b\": 2}, { \"a\": 1.1, \"b\": 2}]".to_string();
+#[derive(Parser, Debug)]
+#[command(name = "tabby")]
+#[command(version)]
+#[command(about = "A data tabulation tool", long_about = None)]
+pub struct Cli {
+    /// Input file path
+    #[arg(short = 'i', long = "input", value_name = "FILE")]
+    input: PathBuf,
 
-    let json = JsonFileType::new(file.as_str()).unwrap();
+    /// Input format (e.g. json, csv)
+    #[arg(long = "from", value_enum)]
+    input_format: InputFormat,
 
-    let obj = json.to_object();
+    /// Output format (e.g. python)
+    #[arg(long = "to", value_enum)]
+    output_format: OutputFormat,
 
-    let code = Python::generate(obj);
+    /// Output file path (defaults to stdout if not set)
+    #[arg(short = 'o', long = "output", value_name = "FILE")]
+    output: Option<PathBuf>,
 
-    println!("{}", code);
+    /// Optional delimiter for CSV files
+    #[arg(long = "delimiter", value_name = "CHAR")]
+    delimiter: Option<char>,
+}
 
-    Ok(())
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum InputFormat {
+    Json,
+    Csv,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum OutputFormat {
+    Python,
 }
 
 fn main() {
-    if let Err(err) = example() {
-        println!("error running example: {}", err);
-        process::exit(1);
-    }
+    let cli = Cli::parse();
+
+    let file = std::fs::read_to_string(&cli.input)
+        .expect(format!("Unable to open file: {}", &cli.input.display()).as_str());
+
+    let input_objects = match cli.input_format {
+        InputFormat::Csv => {
+            let mut csv_options = CsvOptions::new();
+
+            if let Some(delimiter) = cli.delimiter {
+                csv_options.delimiter = delimiter;
+            }
+
+            CsvFileType::new(file.as_str(), csv_options)
+                .expect("Unable to parse csv")
+                .to_object()
+        }
+        InputFormat::Json => JsonFileType::new(file.as_str())
+            .expect("Unable to parse json")
+            .to_object(),
+    };
+
+    let output_code = match cli.output_format {
+        OutputFormat::Python => Python::generate(input_objects),
+    };
+
+    match cli.output {
+        Some(f) => {
+            let _ = std::fs::write(f, output_code).expect("Failed to write output file");
+        }
+        None => {
+            let _ = std::io::stdout()
+                .write_all(output_code.as_bytes())
+                .expect("Failed to write to std out");
+        }
+    };
 }

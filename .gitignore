@@ -22,6 +22,7 @@ target
 
 *.py
 *.json
+testing_samples
 
 # Added by cargo
 

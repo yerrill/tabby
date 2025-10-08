@@ -1,5 +1,6 @@
 use crate::state::StateObject;
 
+mod jsonschema;
 mod python;
 
 pub use python::Python;

@@ -17,18 +17,13 @@ enum TypePrimative {
 }
 
 impl TypePrimative {
-    fn from_field_state(field: FieldState) -> Vec<TypePrimative> {
+    fn from_field_state(field: FieldState) -> Self {
         match field {
-            FieldState::Unset => vec![Self::Null],
-            FieldState::None => vec![Self::Null],
-            FieldState::Bool => vec![Self::Boolean],
-            FieldState::Int => vec![Self::Integer],
-            FieldState::Float => vec![Self::Number],
-            FieldState::Str => vec![Self::String],
-            FieldState::BoolOrNone => vec![Self::Boolean, Self::Null],
-            FieldState::IntOrNone => vec![Self::Integer, Self::Null],
-            FieldState::FloatOrNone => vec![Self::Number, Self::Null],
-            FieldState::StrOrNone => vec![Self::String, Self::Null],
+            FieldState::None => Self::Null,
+            FieldState::Bool => Self::Boolean,
+            FieldState::Int => Self::Integer,
+            FieldState::Float => Self::Number,
+            FieldState::Str => Self::String,
         }
     }
 
@@ -47,19 +42,16 @@ fn union_to_json(uo: UnionObject) -> Value {
     let mut schemas: Vec<Value> = Vec::new();
 
     // Terminal cases
-    for t in uo.terminal {
-        let primatives = TypePrimative::from_field_state(t)
-            .into_iter()
-            .map(|i| i.to_string())
-            .collect::<Vec<_>>();
 
-        if primatives.len() > 1 {
-            schemas.push(json!({"type": primatives}));
-        } else if primatives.len() == 1 {
-            schemas.push(json!({"type": primatives[0]}));
-        } else {
-            panic!("No primatives returnd for {:?}", t);
-        }
+    let mut primatives = uo
+        .terminal
+        .into_iter()
+        .map(|i| TypePrimative::from_field_state(i).to_string());
+
+    if primatives.len() == 1 {
+        schemas.push(json!({"type": primatives.next().unwrap()}));
+    } else if primatives.len() > 1 {
+        schemas.push(json!({"type": primatives.collect::<Vec<_>>()}));
     }
 
     // Array case
@@ -69,9 +61,18 @@ fn union_to_json(uo: UnionObject) -> Value {
 
     // Object case
     if let Some(o) = uo.object {
-        schemas.push(json!({"type": "object", "properties":
-            o.into_iter().map(|(k, v)| (k, union_to_json(v))).collect::<HashMap<_, _>>()
-        }));
+        let required = o
+            .iter()
+            .filter(|(_, v)| !v.terminal.contains(&FieldState::None))
+            .map(|(k, _)| k.to_owned())
+            .collect::<Vec<_>>();
+
+        let properties = o
+            .into_iter()
+            .map(|(k, v)| (k, union_to_json(v)))
+            .collect::<HashMap<_, _>>();
+
+        schemas.push(json!({"type": "object", "properties": properties, "required": required}));
     };
 
     if schemas.len() == 0 {

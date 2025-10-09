@@ -10,6 +10,7 @@ const NL: &'static str = "\n";
 const ARRAY: &'static str = "list";
 const LBRACKET: &'static str = "[";
 const RBRACKET: &'static str = "]";
+const PIPE: &'static str = "|";
 
 pub struct Python {}
 
@@ -26,25 +27,24 @@ impl Generation for Python {
 
 fn python_types(state: FieldState) -> &'static str {
     match state {
-        FieldState::Unset => "None",
         FieldState::None => "None",
         FieldState::Bool => "bool",
         FieldState::Int => "int",
         FieldState::Float => "float",
         FieldState::Str => "str",
-        FieldState::BoolOrNone => "bool | None",
-        FieldState::IntOrNone => "int | None",
-        FieldState::FloatOrNone => "float | None",
-        FieldState::StrOrNone => "str | None",
     }
 }
 
 fn codegen_union(output_text: &mut String, field_name: &str, uo: UnionObject) -> String {
     let mut output = Vec::new();
 
-    if let Some(terminal) = uo.terminal {
-        output.push(String::new() + python_types(terminal));
-    }
+    output.push(
+        uo.terminal
+            .into_iter()
+            .map(|f| python_types(f))
+            .collect::<Vec<_>>()
+            .join(PIPE),
+    );
 
     if let Some(array) = uo.array {
         output.push(

@@ -1,9 +1,9 @@
 use super::{FieldState, StateObject};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct UnionObject {
-    pub terminal: Option<FieldState>,
+    pub terminal: HashSet<FieldState>,
     pub array: Option<Box<UnionObject>>,
     pub object: Option<HashMap<String, UnionObject>>,
 }
@@ -12,18 +12,18 @@ impl UnionObject {
     pub fn from_state_object(st: StateObject) -> UnionObject {
         match st {
             StateObject::Type(t) => UnionObject {
-                terminal: Some(FieldState::Unset.change(t)),
+                terminal: HashSet::from([t]),
                 array: None,
                 object: None,
             },
             StateObject::Array(a) => UnionObject {
-                terminal: None,
+                terminal: HashSet::new(),
                 array: Some(Box::new(
                     a.into_iter()
                         .map(|i| Self::from_state_object(i))
                         .reduce(|acc, e| crunch_unions(acc, e))
                         .unwrap_or(UnionObject {
-                            terminal: None,
+                            terminal: HashSet::new(),
                             array: None,
                             object: None,
                         }),
@@ -31,7 +31,7 @@ impl UnionObject {
                 object: None,
             },
             StateObject::Object(o) => UnionObject {
-                terminal: None,
+                terminal: HashSet::new(),
                 array: None,
                 object: Some(
                     o.into_iter()
@@ -44,11 +44,11 @@ impl UnionObject {
 }
 
 fn crunch_unions(uo_1: UnionObject, uo_2: UnionObject) -> UnionObject {
-    let terminal = match (uo_1.terminal, uo_2.terminal) {
-        (Some(s1), Some(s2)) => Some(s1.change(s2)),
-        (Some(s1), None) => Some(s1),
-        (None, Some(s2)) => Some(s2),
-        (None, None) => None,
+    let terminal = {
+        let mut set = HashSet::new();
+        set.extend(uo_1.terminal.into_iter());
+        set.extend(uo_2.terminal.into_iter());
+        set
     };
 
     let array = match (uo_1.array, uo_2.array) {
@@ -71,7 +71,7 @@ fn crunch_unions(uo_1: UnionObject, uo_2: UnionObject) -> UnionObject {
                         crunch_unions(
                             s1_value,
                             UnionObject {
-                                terminal: Some(FieldState::None),
+                                terminal: HashSet::from([FieldState::None]),
                                 array: None,
                                 object: None,
                             },
@@ -89,7 +89,7 @@ fn crunch_unions(uo_1: UnionObject, uo_2: UnionObject) -> UnionObject {
                     crunch_unions(
                         value,
                         UnionObject {
-                            terminal: Some(FieldState::None),
+                            terminal: HashSet::from([FieldState::None]),
                             array: None,
                             object: None,
                         },
@@ -119,9 +119,9 @@ mod tests {
     #[test]
     fn union_obj() {
         let u1 = UnionObject {
-            terminal: Some(FieldState::Int),
+            terminal: HashSet::from([FieldState::Int]),
             array: Some(Box::new(UnionObject {
-                terminal: Some(FieldState::Bool),
+                terminal: HashSet::from([FieldState::Bool]),
                 array: None,
                 object: None,
             })),
@@ -130,7 +130,7 @@ mod tests {
                     (
                         String::from("a"),
                         UnionObject {
-                            terminal: Some(FieldState::Float),
+                            terminal: HashSet::from([FieldState::Float]),
                             array: None,
                             object: None,
                         },
@@ -138,7 +138,7 @@ mod tests {
                     (
                         String::from("b"),
                         UnionObject {
-                            terminal: Some(FieldState::Int),
+                            terminal: HashSet::from([FieldState::Int]),
                             array: None,
                             object: None,
                         },
@@ -150,9 +150,9 @@ mod tests {
         };
 
         let u2 = UnionObject {
-            terminal: Some(FieldState::None),
+            terminal: HashSet::from([FieldState::None]),
             array: Some(Box::new(UnionObject {
-                terminal: Some(FieldState::Bool),
+                terminal: HashSet::from([FieldState::Bool]),
                 array: None,
                 object: None,
             })),
@@ -161,7 +161,7 @@ mod tests {
                     (
                         String::from("a"),
                         UnionObject {
-                            terminal: Some(FieldState::Float),
+                            terminal: HashSet::from([FieldState::Float]),
                             array: None,
                             object: None,
                         },
@@ -169,7 +169,7 @@ mod tests {
                     (
                         String::from("c"),
                         UnionObject {
-                            terminal: Some(FieldState::Int),
+                            terminal: HashSet::from([FieldState::Int]),
                             array: None,
                             object: None,
                         },
@@ -182,11 +182,14 @@ mod tests {
 
         let out = crunch_unions(u1, u2);
 
-        assert_eq!(out.terminal, Some(FieldState::IntOrNone));
+        assert_eq!(
+            out.terminal,
+            HashSet::from([FieldState::Int, FieldState::None])
+        );
         assert_eq!(
             out.array,
             Some(Box::new(UnionObject {
-                terminal: Some(FieldState::Bool),
+                terminal: HashSet::from([FieldState::Bool]),
                 array: None,
                 object: None,
             }))
@@ -198,7 +201,7 @@ mod tests {
                     (
                         String::from("a"),
                         UnionObject {
-                            terminal: Some(FieldState::Float),
+                            terminal: HashSet::from([FieldState::Float]),
                             array: None,
                             object: None,
                         },
@@ -206,7 +209,7 @@ mod tests {
                     (
                         String::from("b"),
                         UnionObject {
-                            terminal: Some(FieldState::IntOrNone),
+                            terminal: HashSet::from([FieldState::Int, FieldState::None]),
                             array: None,
                             object: None,
                         },
@@ -214,7 +217,7 @@ mod tests {
                     (
                         String::from("c"),
                         UnionObject {
-                            terminal: Some(FieldState::IntOrNone),
+                            terminal: HashSet::from([FieldState::Int, FieldState::None]),
                             array: None,
                             object: None,
                         },
@@ -244,14 +247,14 @@ mod tests {
         );
 
         let a_out = UnionObject {
-            terminal: None,
+            terminal: HashSet::new(),
             array: None,
             object: Some(
                 vec![
                     (
                         String::from("a"),
                         UnionObject {
-                            terminal: Some(FieldState::Int),
+                            terminal: HashSet::from([FieldState::Int]),
                             array: None,
                             object: None,
                         },
@@ -259,9 +262,9 @@ mod tests {
                     (
                         String::from("b"),
                         UnionObject {
-                            terminal: None,
+                            terminal: HashSet::new(),
                             array: Some(Box::new(UnionObject {
-                                terminal: Some(FieldState::Float),
+                                terminal: HashSet::from([FieldState::Float, FieldState::Int]),
                                 array: None,
                                 object: None,
                             })),

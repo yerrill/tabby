@@ -1,9 +1,9 @@
 use super::{FieldState, StateObject};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct UnionObject {
-    pub terminal: Option<FieldState>,
+    pub terminal: HashSet<FieldState>,
     pub array: Option<Box<UnionObject>>,
     pub object: Option<HashMap<String, UnionObject>>,
 }

@@ -1,5 +1,6 @@
 use super::Generation;
 use crate::state::{FieldState, StateObject, UnionObject};
+use serde_json::{Value, json, to_string_pretty};
 use std::collections::HashMap;
 
 const SCHEMA_VERSION: &'static str = "https://json-schema.org/draft/2020-12/schema";
@@ -30,49 +31,55 @@ impl TypePrimative {
             FieldState::StrOrNone => vec![Self::String, Self::Null],
         }
     }
+
+    fn to_string(self) -> &'static str {
+        match self {
+            Self::Null => "null",
+            Self::Boolean => "boolean",
+            Self::Integer => "integer",
+            Self::Number => "number",
+            Self::String => "string",
+        }
+    }
 }
 
-enum Subschema {
-    Terminal {
-        primative_type: TypePrimative,
-    },
+fn union_to_json(uo: UnionObject) -> Value {
+    let mut schemas: Vec<Value> = Vec::new();
 
-    Array {
-        items: Box<Subschema>,
-    },
+    // Terminal cases
+    for t in uo.terminal {
+        let primatives = TypePrimative::from_field_state(t)
+            .into_iter()
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>();
 
-    Object {
-        properties: HashMap<String, Subschema>,
-    },
-}
+        if primatives.len() > 1 {
+            schemas.push(json!({"type": primatives}));
+        } else if primatives.len() == 1 {
+            schemas.push(json!({"type": primatives[0]}));
+        } else {
+            panic!("No primatives returnd for {:?}", t);
+        }
+    }
 
-impl Subschema {
-    fn from_union(uo: UnionObject) -> Self {
-        let subschemas: Vec<Subschema> = Vec::new();
+    // Array case
+    if let Some(a) = uo.array {
+        schemas.push(json!({"type": "array", "items": union_to_json(*a)}));
+    };
 
-        // Terminal cases
-        subschemas.extend(match uo.terminal {
-            Some(t) => TypePrimative::from_field_state(t)
-                .into_iter()
-                .map(|p| Subschema::Terminal { primative_type: p })
-                .collect(),
-            None => Vec::new(),
-        });
+    // Object case
+    if let Some(o) = uo.object {
+        schemas.push(json!({"type": "object", "properties":
+            o.into_iter().map(|(k, v)| (k, union_to_json(v))).collect::<HashMap<_, _>>()
+        }));
+    };
 
-        if let Some(a) = uo.array {
-            subschemas.push(Subschema::Array {
-                items: Box::new(Self::from_union(*a)),
-            });
-        };
-
-        if let Some(o) = uo.object {
-            subschemas.push(Subschema::Object {
-                properties: o
-                    .into_iter()
-                    .map(|(k, v)| (k, Subschema::from_union(v)))
-                    .collect(),
-            });
-        };
+    if schemas.len() == 0 {
+        json!({})
+    } else if schemas.len() == 1 {
+        schemas.pop().expect("Could not pop from schemas array")
+    } else {
+        json!({"anyOf": schemas})
     }
 }
 
@@ -81,8 +88,19 @@ pub struct JsonSchema {}
 impl Generation for JsonSchema {
     fn generate(object: StateObject) -> String {
         let uo = UnionObject::from_state_object(object);
-        let subschemas = Subschema::from_union(uo);
 
-        // Array cases
+        let values = union_to_json(uo);
+        let values = if let Value::Object(mut o) = values {
+            let _ = o.insert(
+                String::from("$schema"),
+                Value::String(String::from(SCHEMA_VERSION)),
+            );
+            Value::Object(o)
+        } else {
+            values
+        };
+
+        to_string_pretty(&values)
+            .expect(format!("Values unable to be printed {:?}", values).as_str())
     }
 }

@@ -8,6 +8,8 @@ use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 use clap::{Parser, ValueEnum};
 use std::{io::Write, path::PathBuf};
 
+use crate::codegen::JsonSchema;
+
 #[derive(Parser, Debug)]
 #[command(name = "tabby")]
 #[command(version)]
@@ -42,6 +44,7 @@ pub enum InputFormat {
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum OutputFormat {
+    JsonSchema,
     Python,
 }
 
@@ -69,6 +72,7 @@ fn main() {
     };
 
     let output_code = match cli.output_format {
+        OutputFormat::JsonSchema => JsonSchema::generate(input_objects),
         OutputFormat::Python => Python::generate(input_objects),
     };
 

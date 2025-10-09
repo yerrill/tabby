@@ -7,22 +7,25 @@ use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 
 use clap::{Parser, ValueEnum};
 use regex::Regex;
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "tabby")]
 #[command(version)]
 #[command(about = "A data tabulation tool", long_about = None)]
 pub struct Cli {
-    /// Input file path
+    /// Input file path (default: stdin)
     #[arg(short = 'i', long = "input", value_name = "FILE")]
-    input: PathBuf,
+    input: Option<PathBuf>,
 
-    /// Input data format (e.g. json, csv). If blank, infer based on file extension.
+    /// Input data format (default: json, required if reading from stdin)
     #[arg(short = 'd', long = "input-format", value_enum)]
     input_format: Option<InputData>,
 
-    /// Output file format (e.g. json-schema, python)
+    /// Output file format (default: json-schema)
     #[arg(short = 'f', long = "output-format", value_enum)]
     output_format: Option<OutputFormat>,
 
@@ -76,29 +79,52 @@ impl OutputFormat {
     }
 }
 
-fn main() {
-    let cli = Cli::parse();
+fn process_file_input(
+    file_path: &PathBuf,
+    input_format: Option<InputData>,
+) -> (String, Option<String>, InputData) {
+    let file = std::fs::read_to_string(file_path)
+        .expect(format!("Unable to open file: {}", &file_path.display()).as_str());
 
-    let file = std::fs::read_to_string(&cli.input)
-        .expect(format!("Unable to open file: {}", &cli.input.display()).as_str());
-
-    let file_name = cli
-        .input
+    let file_name = file_path
         .file_name()
         .expect("Given input path is not a file")
         .to_str()
         .unwrap();
 
-    let (title, format) = match (cli.input_format, InputData::infer(file_name)) {
+    let (title, file_format) = match (input_format, InputData::infer(file_name)) {
         (Some(input), (title, _)) => (title, input),
         (None, (title, Some(input))) => (title, input),
         _ => panic!(
             "Could not determine input formats. Given argument: {:?}, Given file: {:?}",
-            cli.input_format, file_name
+            input_format, file_name
         ),
     };
 
-    let input_objects = match format {
+    (file, Some(title), file_format)
+}
+
+fn process_stdin_input(input_format: Option<InputData>) -> (String, Option<String>, InputData) {
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_to_string(&mut buffer)
+        .expect("Unable to read from stdin");
+
+    let file_format = input_format.expect("Cannot infer input format from stdin");
+
+    (buffer, None, file_format)
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let (file, title, file_format) = if let Some(file_path) = &cli.input {
+        process_file_input(file_path, cli.input_format)
+    } else {
+        process_stdin_input(cli.input_format)
+    };
+
+    let input_objects = match file_format {
         InputData::Csv => {
             let mut csv_options = CsvOptions::new();
 
@@ -118,7 +144,7 @@ fn main() {
     let output_options = {
         let mut options = CodegenOptions::new();
 
-        options.title = Some(title);
+        options.title = title;
         options
     };
 

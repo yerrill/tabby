@@ -1,4 +1,4 @@
-use super::Generation;
+use super::{CodegenOptions, Generation};
 use crate::state::{FieldState, StateObject, UnionObject};
 use serde_json::{Value, json, to_string_pretty};
 use std::collections::HashMap;
@@ -87,7 +87,7 @@ fn union_to_json(uo: UnionObject) -> Value {
 pub struct JsonSchema {}
 
 impl Generation for JsonSchema {
-    fn generate(object: StateObject) -> String {
+    fn generate(object: StateObject, options: CodegenOptions) -> String {
         let uo = UnionObject::from_state_object(object);
 
         let values = union_to_json(uo);
@@ -96,6 +96,10 @@ impl Generation for JsonSchema {
                 String::from("$schema"),
                 Value::String(String::from(SCHEMA_VERSION)),
             );
+
+            if let Some(title) = &options.title {
+                let _ = o.insert(String::from("title"), Value::String(title.clone()));
+            }
             Value::Object(o)
         } else {
             values

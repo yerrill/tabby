@@ -2,13 +2,12 @@ mod codegen;
 mod filetype;
 mod state;
 
-use codegen::{Generation, Python};
+use codegen::{CodegenOptions, Generation, JsonSchema, Python};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 
 use clap::{Parser, ValueEnum};
+use regex::Regex;
 use std::{io::Write, path::PathBuf};
-
-use crate::codegen::JsonSchema;
 
 #[derive(Parser, Debug)]
 #[command(name = "tabby")]
@@ -19,13 +18,13 @@ pub struct Cli {
     #[arg(short = 'i', long = "input", value_name = "FILE")]
     input: PathBuf,
 
-    /// Input format (e.g. json, csv)
-    #[arg(long = "from", value_enum)]
-    input_format: InputFormat,
+    /// Input data format (e.g. json, csv). If blank, infer based on file extension.
+    #[arg(short = 'd', long = "input-format", value_enum)]
+    input_format: Option<InputData>,
 
-    /// Output format (e.g. python)
-    #[arg(long = "to", value_enum)]
-    output_format: OutputFormat,
+    /// Output file format (e.g. json-schema, python)
+    #[arg(short = 'f', long = "output-format", value_enum)]
+    output_format: Option<OutputFormat>,
 
     /// Output file path (defaults to stdout if not set)
     #[arg(short = 'o', long = "output", value_name = "FILE")]
@@ -37,9 +36,29 @@ pub struct Cli {
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
-pub enum InputFormat {
+pub enum InputData {
     Json,
     Csv,
+}
+
+impl InputData {
+    fn infer(file_name: &str) -> (String, Option<Self>) {
+        let file = Regex::new(r"(?<name>.*)(?:\.(?<ext>.*))$").unwrap();
+
+        let Some(caps) = file.captures(file_name) else {
+            return (file_name.to_owned(), None);
+        };
+
+        let title = caps["name"].to_owned();
+
+        let format = match &caps["ext"] {
+            "json" => Some(Self::Json),
+            "csv" => Some(Self::Csv),
+            _ => None,
+        };
+
+        (title, format)
+    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -48,14 +67,39 @@ pub enum OutputFormat {
     Python,
 }
 
+impl OutputFormat {
+    fn resolve(arg: Option<Self>) -> Self {
+        match arg {
+            Some(f) => f,
+            None => Self::JsonSchema,
+        }
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
     let file = std::fs::read_to_string(&cli.input)
         .expect(format!("Unable to open file: {}", &cli.input.display()).as_str());
 
-    let input_objects = match cli.input_format {
-        InputFormat::Csv => {
+    let file_name = cli
+        .input
+        .file_name()
+        .expect("Given input path is not a file")
+        .to_str()
+        .unwrap();
+
+    let (title, format) = match (cli.input_format, InputData::infer(file_name)) {
+        (Some(input), (title, _)) => (title, input),
+        (None, (title, Some(input))) => (title, input),
+        _ => panic!(
+            "Could not determine input formats. Given argument: {:?}, Given file: {:?}",
+            cli.input_format, file_name
+        ),
+    };
+
+    let input_objects = match format {
+        InputData::Csv => {
             let mut csv_options = CsvOptions::new();
 
             if let Some(delimiter) = cli.delimiter {
@@ -66,14 +110,21 @@ fn main() {
                 .expect("Unable to parse csv")
                 .to_object()
         }
-        InputFormat::Json => JsonFileType::new(file.as_str())
+        InputData::Json => JsonFileType::new(file.as_str())
             .expect("Unable to parse json")
             .to_object(),
     };
 
-    let output_code = match cli.output_format {
-        OutputFormat::JsonSchema => JsonSchema::generate(input_objects),
-        OutputFormat::Python => Python::generate(input_objects),
+    let output_options = {
+        let mut options = CodegenOptions::new();
+
+        options.title = Some(title);
+        options
+    };
+
+    let output_code = match OutputFormat::resolve(cli.output_format) {
+        OutputFormat::JsonSchema => JsonSchema::generate(input_objects, output_options),
+        OutputFormat::Python => Python::generate(input_objects, output_options),
     };
 
     match cli.output {

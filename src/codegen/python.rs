@@ -1,4 +1,4 @@
-use super::Generation;
+use super::{CodegenOptions, Generation};
 use crate::state::{FieldState, StateObject, UnionObject};
 
 const IMPORTS: &'static str = "from dataclasses import dataclass\n\n";
@@ -15,7 +15,7 @@ const PIPE: &'static str = "|";
 pub struct Python {}
 
 impl Generation for Python {
-    fn generate(object: StateObject) -> String {
+    fn generate(object: StateObject, _: CodegenOptions) -> String {
         let uo = UnionObject::from_state_object(object);
         let mut output = String::new();
         output = output + IMPORTS;

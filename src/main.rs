@@ -33,6 +33,10 @@ pub struct Cli {
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<PathBuf>,
 
+    /// Optional specify title
+    #[arg(long = "title", value_name = "STRING")]
+    title: Option<String>,
+
     /// Optional delimiter for CSV files
     #[arg(long = "delimiter", value_name = "CHAR")]
     delimiter: Option<char>,
@@ -150,7 +154,11 @@ fn main() {
     let output_options = {
         let mut options = CodegenOptions::new();
 
-        options.title = title;
+        options.title = if let Some(t) = cli.title {
+            Some(t)
+        } else {
+            title
+        };
         options
     };
 

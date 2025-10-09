@@ -8,7 +8,7 @@ use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 use clap::{Parser, ValueEnum};
 use regex::Regex;
 use std::{
-    io::{Read, Write},
+    io::{IsTerminal, Read, Write},
     path::PathBuf,
 };
 
@@ -106,7 +106,13 @@ fn process_file_input(
 
 fn process_stdin_input(input_format: Option<InputData>) -> (String, Option<String>, InputData) {
     let mut buffer = String::new();
-    std::io::stdin()
+    let mut stdin = std::io::stdin();
+
+    if stdin.is_terminal() {
+        panic!("No data input provided. Run `tabby --help` for usage.");
+    }
+
+    stdin
         .read_to_string(&mut buffer)
         .expect("Unable to read from stdin");
 

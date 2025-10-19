@@ -2,7 +2,7 @@ mod codegen;
 mod filetype;
 mod state;
 
-use codegen::{CodegenOptions, Generation, JsonSchema, Python};
+use codegen::{CodegenOptions, Generation, JsonSchema};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 
 use clap::{Parser, ValueEnum};
@@ -24,10 +24,6 @@ pub struct Cli {
     /// Input data format (default: json, required if reading from stdin)
     #[arg(short = 'd', long = "input-format", value_enum)]
     input_format: Option<InputData>,
-
-    /// Output file format (default: json-schema)
-    #[arg(short = 'f', long = "output-format", value_enum)]
-    output_format: Option<OutputFormat>,
 
     /// Output file path (defaults to stdout if not set)
     #[arg(short = 'o', long = "output", value_name = "FILE")]
@@ -65,21 +61,6 @@ impl InputData {
         };
 
         (title, format)
-    }
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
-pub enum OutputFormat {
-    JsonSchema,
-    Python,
-}
-
-impl OutputFormat {
-    fn resolve(arg: Option<Self>) -> Self {
-        match arg {
-            Some(f) => f,
-            None => Self::JsonSchema,
-        }
     }
 }
 

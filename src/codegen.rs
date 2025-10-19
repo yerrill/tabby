@@ -1,21 +1,23 @@
-use crate::state::StateObject;
+use crate::state::Subschema;
 
 mod jsonschema;
-mod python;
 
 pub use jsonschema::JsonSchema;
-pub use python::Python;
 
 pub struct CodegenOptions {
     pub title: Option<String>,
+    pub enum_threshold: u8,
 }
 
 impl CodegenOptions {
     pub fn new() -> Self {
-        Self { title: None }
+        Self {
+            title: None,
+            enum_threshold: 10,
+        }
     }
 }
 
 pub trait Generation {
-    fn generate(object: StateObject, options: CodegenOptions) -> String;
+    fn generate(object: Subschema, options: CodegenOptions) -> String;
 }

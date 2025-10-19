@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error};
 
 use super::Filetype;
-use crate::state::{FieldState, StateObject};
+use crate::state::{DataValues, Literals};
 
 pub struct CsvOptions {
     pub delimiter: char,
@@ -14,7 +14,7 @@ impl CsvOptions {
 }
 
 pub struct CsvFileType {
-    objects: Vec<HashMap<String, FieldState>>,
+    objects: Vec<HashMap<String, Literals>>,
 }
 
 impl CsvFileType {
@@ -30,14 +30,14 @@ impl CsvFileType {
             .map(|s| s.to_owned())
             .collect::<Vec<_>>();
 
-        let mut objs: Vec<HashMap<String, FieldState>> = Vec::new();
+        let mut objs: Vec<HashMap<String, Literals>> = Vec::new();
 
         for result in reader.records() {
             objs.push(
                 fields
                     .iter()
                     .zip(result?.iter())
-                    .map(|(k, v)| (k.to_owned(), FieldState::from_str(v)))
+                    .map(|(k, v)| (k.to_owned(), Literals::from(v)))
                     .collect(),
             );
         }
@@ -47,14 +47,14 @@ impl CsvFileType {
 }
 
 impl Filetype for CsvFileType {
-    fn to_object(self) -> StateObject {
-        StateObject::Array(
+    fn to_object(self) -> DataValues {
+        DataValues::Array(
             self.objects
                 .into_iter()
                 .map(|h| {
-                    StateObject::Object(
+                    DataValues::Object(
                         h.into_iter()
-                            .map(|(k, v)| (k, StateObject::Type(v)))
+                            .map(|(k, v)| (k, DataValues::Literal(v)))
                             .collect(),
                     )
                 })

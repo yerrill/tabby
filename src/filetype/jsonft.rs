@@ -1,5 +1,5 @@
 use super::Filetype;
-use crate::state::{FieldState, StateObject};
+use crate::state::{DataValues, Literals};
 use serde_json::Value as sj_value;
 
 pub struct JsonFileType {
@@ -13,9 +13,9 @@ impl JsonFileType {
         Ok(Self { json })
     }
 
-    fn refine_number(num: &serde_json::Number) -> FieldState {
+    fn refine_number(num: &serde_json::Number) -> Literals {
         if num.is_f64() {
-            FieldState::Float
+            Literals::Float
         } else {
             FieldState::Int
         }

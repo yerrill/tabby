@@ -1,5 +1,5 @@
 use super::{CodegenOptions, Generation};
-use crate::state::{DataValues, Literals, ObjectProperty, Subschema};
+use crate::state::{Literals, ObjectProperty, Subschema};
 use serde_json::{Value, json, to_string_pretty};
 use std::collections::{HashMap, HashSet};
 

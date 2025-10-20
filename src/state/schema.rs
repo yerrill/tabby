@@ -155,9 +155,9 @@ fn crunch_schemas(uo_1: Subschema, uo_2: Subschema) -> Subschema {
 }
 
 #[cfg(test)]
+#[allow(dead_code, unused_imports)]
 mod tests {
     use std::collections::HashSet;
-    use std::ops::Sub;
 
     use super::super::{DataValues, Literals};
     use super::{ObjectProperty, Subschema, crunch_schemas};

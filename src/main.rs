@@ -4,6 +4,7 @@ mod state;
 
 use codegen::{CodegenOptions, Generation, JsonSchema};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
+use state::Subschema;
 
 use clap::{Parser, ValueEnum};
 use regex::Regex;
@@ -115,7 +116,7 @@ fn main() {
         process_stdin_input(cli.input_format)
     };
 
-    let input_objects = match file_format {
+    let input_data = match file_format {
         InputData::Csv => {
             let mut csv_options = CsvOptions::new();
 
@@ -143,10 +144,7 @@ fn main() {
         options
     };
 
-    let output_code = match OutputFormat::resolve(cli.output_format) {
-        OutputFormat::JsonSchema => JsonSchema::generate(input_objects, output_options),
-        OutputFormat::Python => Python::generate(input_objects, output_options),
-    };
+    let output_code = JsonSchema::generate(Subschema::from_data(input_data), output_options);
 
     match cli.output {
         Some(f) => {

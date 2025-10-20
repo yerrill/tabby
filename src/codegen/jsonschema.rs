@@ -69,6 +69,7 @@ fn literals_to_json(
 
     // If unique values are less than total count * ratio
     if types.len() < (types_instance_count * options.enum_threshold as usize) / 100 {
+        dbg!("triggered");
         Some(
             json!({"types": type_part, "enum": types.into_iter().map(|l| literal_to_value(l)).collect::<Vec<_>>()}),
         )

@@ -37,6 +37,10 @@ pub struct Cli {
     /// Optional delimiter for CSV files
     #[arg(long = "delimiter", value_name = "CHAR")]
     delimiter: Option<char>,
+
+    /// Optional enum threshold, field must have less than given percent unique values to be counted as an enum
+    #[arg(long = "enum", value_name = "0-100")]
+    enum_threshold: Option<u8>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -110,10 +114,9 @@ fn process_stdin_input(input_format: Option<InputData>) -> (String, Option<Strin
 fn main() {
     let cli = Cli::parse();
 
-    let (file, title, file_format) = if let Some(file_path) = &cli.input {
-        process_file_input(file_path, cli.input_format)
-    } else {
-        process_stdin_input(cli.input_format)
+    let (file, title, file_format) = match &cli.input {
+        Some(file_path) => process_file_input(file_path, cli.input_format),
+        None => process_stdin_input(cli.input_format),
     };
 
     let input_data = match file_format {
@@ -136,11 +139,15 @@ fn main() {
     let output_options = {
         let mut options = CodegenOptions::new();
 
-        options.title = if let Some(t) = cli.title {
-            Some(t)
-        } else {
-            title
+        options.title = match cli.title {
+            Some(t) => Some(t),
+            None => title,
         };
+
+        if let Some(n) = cli.enum_threshold {
+            options.enum_threshold = n;
+        };
+
         options
     };
 

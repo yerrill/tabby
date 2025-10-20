@@ -16,7 +16,6 @@ const PATTERNS_FLOAT_NEGATIVE: [&'static str; 2] = [
 
 fn check_integer(data: &str) -> Option<i64> {
     let data = data.replace(&REMOVE_CHARS_PRE, "");
-    dbg!(&data);
 
     for pattern in PATTERNS_INTEGER_POSITIVE {
         let re = Regex::new(pattern).unwrap();
@@ -50,7 +49,6 @@ fn check_integer(data: &str) -> Option<i64> {
 
 fn check_float(data: &str) -> Option<f64> {
     let data = data.replace(&REMOVE_CHARS_PRE, "");
-    dbg!(&data);
 
     for pattern in PATTERNS_FLOAT_POSITIVE {
         let re = Regex::new(pattern).unwrap();

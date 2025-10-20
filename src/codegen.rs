@@ -13,7 +13,7 @@ impl CodegenOptions {
     pub fn new() -> Self {
         Self {
             title: None,
-            enum_threshold: 10,
+            enum_threshold: 40,
         }
     }
 }

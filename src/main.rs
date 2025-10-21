@@ -2,10 +2,11 @@ mod codegen;
 mod filetype;
 mod state;
 
-use codegen::{CodegenOptions, Generation, JsonSchema, Python};
+use codegen::{CodegenOptions, Generation, JsonSchema};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
+use state::Subschema;
 
-use clap::{Parser, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 use regex::Regex;
 use std::{
     io::{IsTerminal, Read, Write},
@@ -25,10 +26,6 @@ pub struct Cli {
     #[arg(short = 'd', long = "input-format", value_enum)]
     input_format: Option<InputData>,
 
-    /// Output file format (default: json-schema)
-    #[arg(short = 'f', long = "output-format", value_enum)]
-    output_format: Option<OutputFormat>,
-
     /// Output file path (defaults to stdout if not set)
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<PathBuf>,
@@ -40,6 +37,22 @@ pub struct Cli {
     /// Optional delimiter for CSV files
     #[arg(long = "delimiter", value_name = "CHAR")]
     delimiter: Option<char>,
+
+    /// Disable use of `enum` keyword
+    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    no_enum: bool,
+
+    /// Disable use of `const` keyword
+    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    no_const: bool,
+
+    /// Optional enum percent, field must have less than given percent unique values to be counted as an enum
+    #[arg(long = "enum-percent", value_name = "0-100")]
+    enum_threshold: Option<u8>,
+
+    /// Optional enum maximum, max number of unique values a field can have to be considered an enum
+    #[arg(long = "enum-max", value_name = "0-255")]
+    enum_maximum: Option<u8>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -65,21 +78,6 @@ impl InputData {
         };
 
         (title, format)
-    }
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
-pub enum OutputFormat {
-    JsonSchema,
-    Python,
-}
-
-impl OutputFormat {
-    fn resolve(arg: Option<Self>) -> Self {
-        match arg {
-            Some(f) => f,
-            None => Self::JsonSchema,
-        }
     }
 }
 
@@ -128,13 +126,12 @@ fn process_stdin_input(input_format: Option<InputData>) -> (String, Option<Strin
 fn main() {
     let cli = Cli::parse();
 
-    let (file, title, file_format) = if let Some(file_path) = &cli.input {
-        process_file_input(file_path, cli.input_format)
-    } else {
-        process_stdin_input(cli.input_format)
+    let (file, title, file_format) = match &cli.input {
+        Some(file_path) => process_file_input(file_path, cli.input_format),
+        None => process_stdin_input(cli.input_format),
     };
 
-    let input_objects = match file_format {
+    let input_data = match file_format {
         InputData::Csv => {
             let mut csv_options = CsvOptions::new();
 
@@ -154,18 +151,24 @@ fn main() {
     let output_options = {
         let mut options = CodegenOptions::new();
 
-        options.title = if let Some(t) = cli.title {
-            Some(t)
-        } else {
-            title
+        options.title = match cli.title {
+            Some(t) => Some(t),
+            None => title,
         };
+
+        options.use_enum = cli.no_enum;
+        options.use_const = cli.no_const;
+
+        if let Some(n) = cli.enum_threshold {
+            options.enum_threshold = n;
+        };
+
+        options.enum_maximum = cli.enum_maximum;
+
         options
     };
 
-    let output_code = match OutputFormat::resolve(cli.output_format) {
-        OutputFormat::JsonSchema => JsonSchema::generate(input_objects, output_options),
-        OutputFormat::Python => Python::generate(input_objects, output_options),
-    };
+    let output_code = JsonSchema::generate(Subschema::from_data(input_data), output_options);
 
     match cli.output {
         Some(f) => {

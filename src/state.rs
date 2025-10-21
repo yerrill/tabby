@@ -1,7 +1,5 @@
-mod field;
-mod object;
-mod union;
+mod data;
+mod schema;
 
-pub use field::FieldState;
-pub use object::StateObject;
-pub use union::UnionObject;
+pub use data::{DataValues, Literals};
+pub use schema::{ObjectProperty, Subschema};

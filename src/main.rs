@@ -6,7 +6,7 @@ use codegen::{CodegenOptions, Generation, JsonSchema};
 use filetype::{CsvFileType, CsvOptions, Filetype, JsonFileType};
 use state::Subschema;
 
-use clap::{Parser, ValueEnum};
+use clap::{ArgAction, Parser, ValueEnum};
 use regex::Regex;
 use std::{
     io::{IsTerminal, Read, Write},
@@ -38,9 +38,21 @@ pub struct Cli {
     #[arg(long = "delimiter", value_name = "CHAR")]
     delimiter: Option<char>,
 
-    /// Optional enum threshold, field must have less than given percent unique values to be counted as an enum
-    #[arg(long = "enum", value_name = "0-100")]
+    /// Disable use of `enum` keyword
+    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    no_enum: bool,
+
+    /// Disable use of `const` keyword
+    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    no_const: bool,
+
+    /// Optional enum percent, field must have less than given percent unique values to be counted as an enum
+    #[arg(long = "enum-percent", value_name = "0-100")]
     enum_threshold: Option<u8>,
+
+    /// Optional enum maximum, max number of unique values a field can have to be considered an enum
+    #[arg(long = "enum-max", value_name = "0-255")]
+    enum_maximum: Option<u8>,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -144,9 +156,14 @@ fn main() {
             None => title,
         };
 
+        options.use_enum = cli.no_enum;
+        options.use_const = cli.no_const;
+
         if let Some(n) = cli.enum_threshold {
             options.enum_threshold = n;
         };
+
+        options.enum_maximum = cli.enum_maximum;
 
         options
     };

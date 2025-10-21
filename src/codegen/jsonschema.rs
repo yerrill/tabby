@@ -1,6 +1,6 @@
 use super::{CodegenOptions, Generation};
 use crate::state::{Literals, ObjectProperty, Subschema};
-use serde_json::{Value, json, to_string_pretty};
+use serde_json::{Number, Value, json, to_string_pretty};
 use std::collections::{HashMap, HashSet};
 
 const SCHEMA_VERSION: &'static str = "https://json-schema.org/draft/2020-12/schema";
@@ -43,7 +43,7 @@ fn literal_to_value(l: Literals) -> Value {
         Literals::Null => Value::Null,
         Literals::Boolean(b) => Value::Bool(b),
         Literals::Integer(i) => Value::Number(i.into()),
-        Literals::Float(f) => Value::Number(f.into()),
+        Literals::Float(f) => Value::from(Number::from_f64(f64::from_bits(f))),
         Literals::String(s) => Value::String(s),
     }
 }
@@ -68,8 +68,28 @@ fn literals_to_json(
     };
 
     // If unique values are less than total count * ratio
-    if types.len() < (types_instance_count * options.enum_threshold as usize) / 100 {
-        dbg!("triggered");
+    let unique_threshold =
+        types.len() < (types_instance_count * options.enum_threshold as usize) / 100;
+
+    // If types are only boolean, skip enum
+    let only_bool = types.iter().all(|v| match v {
+        Literals::Boolean(_) => true,
+        _ => false,
+    });
+
+    // If unique values are below given maximum
+    let below_maximum = match options.enum_maximum {
+        Some(m) => types.len() < m.into(),
+        None => true,
+    };
+
+    let create_enum = options.use_enum && unique_threshold && !only_bool && below_maximum;
+
+    let create_const = options.use_const && (types.len() == 1);
+
+    if create_const {
+        Some(json!({"const": literal_to_value(types.into_iter().next().unwrap())}))
+    } else if create_enum {
         Some(
             json!({"types": type_part, "enum": types.into_iter().map(|l| literal_to_value(l)).collect::<Vec<_>>()}),
         )

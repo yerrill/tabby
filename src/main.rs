@@ -86,7 +86,7 @@ fn process_file_input(
     input_format: Option<InputData>,
 ) -> (String, Option<String>, InputData) {
     let file = std::fs::read_to_string(file_path)
-        .expect(format!("Unable to open file: {}", &file_path.display()).as_str());
+        .unwrap_or_else(|_| panic!("Unable to open file: {}", &file_path.display()));
 
     let file_name = file_path
         .file_name()
@@ -172,10 +172,10 @@ fn main() {
 
     match cli.output {
         Some(f) => {
-            let _ = std::fs::write(f, output_code).expect("Failed to write output file");
+            std::fs::write(f, output_code).expect("Failed to write output file");
         }
         None => {
-            let _ = std::io::stdout()
+            std::io::stdout()
                 .write_all(output_code.as_bytes())
                 .expect("Failed to write to std out");
         }

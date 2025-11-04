@@ -3,7 +3,7 @@ use crate::state::{Literals, ObjectProperty, Subschema};
 use serde_json::{Number, Value, json, to_string_pretty};
 use std::collections::{HashMap, HashSet};
 
-const SCHEMA_VERSION: &'static str = "https://json-schema.org/draft/2020-12/schema";
+const SCHEMA_VERSION: &str = "https://json-schema.org/draft/2020-12/schema";
 
 #[derive(Clone, Copy)]
 enum TypePrimative {
@@ -27,7 +27,7 @@ impl TypePrimative {
         }
     }
 
-    fn to_string(&self) -> &'static str {
+    fn to_string(self) -> &'static str {
         match self {
             Self::Null => "null",
             Self::Boolean => "boolean",
@@ -72,10 +72,7 @@ fn literals_to_json(
         types.len() < (types_instance_count * options.enum_threshold as usize) / 100;
 
     // If types are only boolean, skip enum
-    let only_bool = types.iter().all(|v| match v {
-        Literals::Boolean(_) => true,
-        _ => false,
-    });
+    let only_bool = types.iter().all(|v| matches!(v, Literals::Boolean(_)));
 
     // If unique values are below given maximum
     let below_maximum = match options.enum_maximum {
@@ -91,7 +88,7 @@ fn literals_to_json(
         Some(json!({"const": literal_to_value(types.into_iter().next().unwrap())}))
     } else if create_enum {
         Some(
-            json!({"types": type_part, "enum": types.into_iter().map(|l| literal_to_value(l)).collect::<Vec<_>>()}),
+            json!({"types": type_part, "enum": types.into_iter().map(literal_to_value).collect::<Vec<_>>()}),
         )
     } else {
         Some(json!({"type": type_part}))
@@ -144,7 +141,7 @@ fn subschema_to_json(
         schemas.push(json!({"type": "object", "properties": properties, "required": required}));
     };
 
-    if schemas.len() == 0 {
+    if schemas.is_empty() {
         json!({})
     } else if schemas.len() == 1 {
         schemas.pop().expect("Could not pop from schemas array")
@@ -173,6 +170,6 @@ impl Generation for JsonSchema {
         };
 
         to_string_pretty(&values)
-            .expect(format!("Values unable to be printed {:?}", values).as_str())
+            .unwrap_or_else(|_| panic!("Values unable to be printed {:?}", values))
     }
 }

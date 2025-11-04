@@ -37,8 +37,8 @@ impl Subschema {
                 types: HashSet::new(),
                 array: Some(Box::new(
                     a.into_iter()
-                        .map(|i| Self::from_data(i))
-                        .reduce(|acc, e| crunch_schemas(acc, e))
+                        .map(Self::from_data)
+                        .reduce(crunch_schemas)
                         .unwrap_or(Self::new()),
                 )),
                 object: None,
@@ -69,8 +69,8 @@ impl Subschema {
 fn crunch_schemas(uo_1: Subschema, uo_2: Subschema) -> Subschema {
     let types = {
         let mut set = HashSet::new();
-        set.extend(uo_1.types.into_iter());
-        set.extend(uo_2.types.into_iter());
+        set.extend(uo_1.types);
+        set.extend(uo_2.types);
         set
     };
 

@@ -19,19 +19,19 @@ use std::{
 #[command(about = "A data tabulation tool", long_about = None)]
 pub struct Cli {
     /// Input file path (default: stdin)
-    #[arg(short = 'i', long = "input", value_name = "FILE")]
+    #[arg(value_name = "FILE")]
     input: Option<PathBuf>,
 
-    /// Input data format (default: json, required if reading from stdin)
-    #[arg(short = 'd', long = "input-format", value_enum)]
+    /// Input data format (default: json)
+    #[arg(short = 'f', long = "input-format", value_enum)]
     input_format: Option<InputData>,
 
-    /// Output file path (defaults to stdout if not set)
+    /// Output file path (default: stdout)
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<PathBuf>,
 
     /// Optional specify title
-    #[arg(long = "title", value_name = "STRING")]
+    #[arg(short = 't', long = "title", value_name = "STRING")]
     title: Option<String>,
 
     /// Optional delimiter for CSV files
@@ -39,11 +39,11 @@ pub struct Cli {
     delimiter: Option<char>,
 
     /// Disable use of `enum` keyword
-    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    #[arg(long = "no-enum", action = ArgAction::SetFalse, default_value_t = true)]
     no_enum: bool,
 
     /// Disable use of `const` keyword
-    #[arg(short, long, action = ArgAction::SetFalse, default_value_t = true)]
+    #[arg(long = "no-const", action = ArgAction::SetFalse, default_value_t = true)]
     no_const: bool,
 
     /// Optional enum percent, field must have less than given percent unique values to be counted as an enum
@@ -81,55 +81,68 @@ impl InputData {
     }
 }
 
-fn process_file_input(
-    file_path: &PathBuf,
-    input_format: Option<InputData>,
-) -> (String, Option<String>, InputData) {
-    let file = std::fs::read_to_string(file_path)
-        .unwrap_or_else(|_| panic!("Unable to open file: {}", &file_path.display()));
-
-    let file_name = file_path
-        .file_name()
-        .expect("Given input path is not a file")
-        .to_str()
-        .unwrap();
-
-    let (title, file_format) = match (input_format, InputData::infer(file_name)) {
-        (Some(input), (title, _)) => (title, input),
-        (None, (title, Some(input))) => (title, input),
-        _ => panic!(
-            "Could not determine input formats. Given argument: {:?}, Given file: {:?}",
-            input_format, file_name
-        ),
-    };
-
-    (file, Some(title), file_format)
+fn resolve_title(cli: &Cli) -> Option<String> {
+    if let Some(title) = &cli.title {
+        Some(title.to_owned())
+    } else if let Some(file_path) = &cli.input {
+        let (title, _) = InputData::infer(
+            file_path
+                .file_name()
+                .expect("Given input path is not a file")
+                .to_str()
+                .unwrap(),
+        );
+        Some(title)
+    } else {
+        None
+    }
 }
 
-fn process_stdin_input(input_format: Option<InputData>) -> (String, Option<String>, InputData) {
-    let mut buffer = String::new();
-    let mut stdin = std::io::stdin();
+fn read_data(cli: &Cli) -> String {
+    if let Some(file_path) = &cli.input {
+        std::fs::read_to_string(file_path)
+            .unwrap_or_else(|_| panic!("Unable to open file: {}", &file_path.display()))
+    } else {
+        let mut buffer = String::new();
+        let mut stdin = std::io::stdin();
 
-    if stdin.is_terminal() {
-        panic!("No data input provided. Run `tabby --help` for usage.");
+        if stdin.is_terminal() {
+            panic!("No data input provided. Run `tabby --help` for usage.");
+        }
+
+        stdin
+            .read_to_string(&mut buffer)
+            .expect("Unable to read from stdin");
+
+        buffer
     }
+}
 
-    stdin
-        .read_to_string(&mut buffer)
-        .expect("Unable to read from stdin");
+fn resolve_format(cli: &Cli) -> InputData {
+    let resolved = if let Some(input_format) = &cli.input_format {
+        Some(*input_format)
+    } else if let Some(file_path) = &cli.input {
+        let (_, input_format) = InputData::infer(
+            file_path
+                .file_name()
+                .expect("Given input path is not a file")
+                .to_str()
+                .unwrap(),
+        );
+        input_format
+    } else {
+        None
+    };
 
-    let file_format = input_format.expect("Cannot infer input format from stdin");
-
-    (buffer, None, file_format)
+    resolved.unwrap_or(InputData::Json)
 }
 
 fn main() {
     let cli = Cli::parse();
 
-    let (file, title, file_format) = match &cli.input {
-        Some(file_path) => process_file_input(file_path, cli.input_format),
-        None => process_stdin_input(cli.input_format),
-    };
+    let title = resolve_title(&cli);
+    let file = read_data(&cli);
+    let file_format = resolve_format(&cli);
 
     let input_data = match file_format {
         InputData::Csv => {
@@ -151,11 +164,7 @@ fn main() {
     let output_options = {
         let mut options = CodegenOptions::new();
 
-        options.title = match cli.title {
-            Some(t) => Some(t),
-            None => title,
-        };
-
+        options.title = title;
         options.use_enum = cli.no_enum;
         options.use_const = cli.no_const;
 

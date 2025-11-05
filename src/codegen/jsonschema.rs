@@ -1,7 +1,10 @@
 use super::{CodegenOptions, Generation};
 use crate::state::{Literals, ObjectProperty, Subschema, SubschemaTypes};
 use serde_json::{Number, Value, json, to_string_pretty};
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
 const SCHEMA_VERSION: &str = "https://json-schema.org/draft/2020-12/schema";
 
@@ -54,12 +57,10 @@ fn literals_to_json(types: SubschemaTypes, options: &CodegenOptions) -> Value {
         .collect::<HashSet<_>>()
         .into_iter();
 
-    let type_part = if primatives.len() == 1 {
-        json!(primatives.next().unwrap())
-    } else if primatives.len() > 1 {
-        json!(primatives.collect::<Vec<_>>())
-    } else {
-        panic!("(Unreachable) Collapsing subscheama types with no values");
+    let type_part = match primatives.len().cmp(&1) {
+        Ordering::Equal => json!(primatives.next().unwrap()),
+        Ordering::Greater => json!(primatives.collect::<Vec<_>>()),
+        _ => panic!("(Unreachable) Collapsing subscheama types with no values"),
     };
 
     // If unique values are less than total count * ratio

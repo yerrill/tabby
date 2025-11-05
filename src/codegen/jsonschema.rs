@@ -1,16 +1,17 @@
 use super::{CodegenOptions, Generation};
-use crate::state::{Literals, ObjectProperty, Subschema};
+use crate::state::{Literals, ObjectProperty, Subschema, SubschemaTypes};
 use serde_json::{Number, Value, json, to_string_pretty};
-use std::collections::{HashMap, HashSet};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
-const SCHEMA_VERSION: &'static str = "https://json-schema.org/draft/2020-12/schema";
+const SCHEMA_VERSION: &str = "https://json-schema.org/draft/2020-12/schema";
 
 #[derive(Clone, Copy)]
 enum TypePrimative {
     Null,
     Boolean,
-    // Object,
-    // Array,
     Integer, // Doesn't appear to be part of core but an accepted vocabulary
     Number,
     String,
@@ -27,7 +28,7 @@ impl TypePrimative {
         }
     }
 
-    fn to_string(&self) -> &'static str {
+    fn to_string(self) -> &'static str {
         match self {
             Self::Null => "null",
             Self::Boolean => "boolean",
@@ -48,53 +49,46 @@ fn literal_to_value(l: Literals) -> Value {
     }
 }
 
-fn literals_to_json(
-    types: HashSet<Literals>,
-    types_instance_count: usize,
-    options: &CodegenOptions,
-) -> Option<Value> {
+fn literals_to_json(types: SubschemaTypes, options: &CodegenOptions) -> Value {
     let mut primatives = types
+        .values
         .iter()
         .map(|i| TypePrimative::from_literal(i).to_string())
         .collect::<HashSet<_>>()
         .into_iter();
 
-    let type_part = if primatives.len() == 1 {
-        json!(primatives.next().unwrap())
-    } else if primatives.len() > 1 {
-        json!(primatives.collect::<Vec<_>>())
-    } else {
-        return None;
+    let type_part = match primatives.len().cmp(&1) {
+        Ordering::Equal => json!(primatives.next().unwrap()),
+        Ordering::Greater => json!(primatives.collect::<Vec<_>>()),
+        _ => panic!("(Unreachable) Collapsing subscheama types with no values"),
     };
 
     // If unique values are less than total count * ratio
     let unique_threshold =
-        types.len() < (types_instance_count * options.enum_threshold as usize) / 100;
+        types.values.len() < (types.instance_count * options.enum_threshold as usize) / 100;
 
     // If types are only boolean, skip enum
-    let only_bool = types.iter().all(|v| match v {
-        Literals::Boolean(_) => true,
-        _ => false,
-    });
+    let only_bool = types
+        .values
+        .iter()
+        .all(|v| matches!(v, Literals::Boolean(_)));
 
     // If unique values are below given maximum
     let below_maximum = match options.enum_maximum {
-        Some(m) => types.len() < m.into(),
+        Some(m) => types.values.len() < m.into(),
         None => true,
     };
 
     let create_enum = options.use_enum && unique_threshold && !only_bool && below_maximum;
 
-    let create_const = options.use_const && (types.len() == 1);
+    let create_const = options.use_const && (types.values.len() == 1);
 
     if create_const {
-        Some(json!({"const": literal_to_value(types.into_iter().next().unwrap())}))
+        json!({"const": literal_to_value(types.values.into_iter().next().unwrap())})
     } else if create_enum {
-        Some(
-            json!({"types": type_part, "enum": types.into_iter().map(|l| literal_to_value(l)).collect::<Vec<_>>()}),
-        )
+        json!({"types": type_part, "enum": types.values.into_iter().map(literal_to_value).collect::<Vec<_>>()})
     } else {
-        Some(json!({"type": type_part}))
+        json!({"type": type_part})
     }
 }
 
@@ -103,7 +97,6 @@ fn subschema_to_json(
         types,
         array,
         object,
-        types_instance_count,
     }: Subschema,
     options: &CodegenOptions,
 ) -> Value {
@@ -111,9 +104,9 @@ fn subschema_to_json(
 
     // Terminal cases
 
-    if let Some(s) = literals_to_json(types, types_instance_count, options) {
-        schemas.push(s);
-    }
+    if let Some(t) = types {
+        schemas.push(literals_to_json(t, options));
+    };
 
     // Array case
     if let Some(a) = array {
@@ -144,7 +137,7 @@ fn subschema_to_json(
         schemas.push(json!({"type": "object", "properties": properties, "required": required}));
     };
 
-    if schemas.len() == 0 {
+    if schemas.is_empty() {
         json!({})
     } else if schemas.len() == 1 {
         schemas.pop().expect("Could not pop from schemas array")
@@ -173,6 +166,6 @@ impl Generation for JsonSchema {
         };
 
         to_string_pretty(&values)
-            .expect(format!("Values unable to be printed {:?}", values).as_str())
+            .unwrap_or_else(|_| panic!("Values unable to be printed {:?}", values))
     }
 }

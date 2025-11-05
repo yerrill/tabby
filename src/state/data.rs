@@ -5,27 +5,27 @@ use std::collections::HashMap;
 const REMOVE_CHARS_PRE: [char; 2] = [' ', '$'];
 const REMOVE_CHARS_POST: [char; 3] = ['(', ')', '-'];
 
-const PATTERNS_INTEGER_POSITIVE: [&'static str; 1] = [r"^[[:digit:]]+$"];
-const PATTERNS_INTEGER_NEGATIVE: [&'static str; 2] = [r"^-[[:digit:]]+$", r"^\([[:digit:]]+\)$"];
+const PATTERNS_INTEGER_POSITIVE: [&str; 1] = [r"^[[:digit:]]+$"];
+const PATTERNS_INTEGER_NEGATIVE: [&str; 2] = [r"^-[[:digit:]]+$", r"^\([[:digit:]]+\)$"];
 
-const PATTERNS_FLOAT_POSITIVE: [&'static str; 1] = [r"^[[:digit:]]+\.[[:digit:]]+$"];
-const PATTERNS_FLOAT_NEGATIVE: [&'static str; 2] = [
+const PATTERNS_FLOAT_POSITIVE: [&str; 1] = [r"^[[:digit:]]+\.[[:digit:]]+$"];
+const PATTERNS_FLOAT_NEGATIVE: [&str; 2] = [
     r"^-[[:digit:]]+\.[[:digit:]]+$",
     r"^\([[:digit:]]+\.[[:digit:]]+\)$",
 ];
 
 fn check_integer(data: &str) -> Option<i64> {
-    let data = data.replace(&REMOVE_CHARS_PRE, "");
+    let data = data.replace(REMOVE_CHARS_PRE, "");
 
     for pattern in PATTERNS_INTEGER_POSITIVE {
         let re = Regex::new(pattern).unwrap();
 
         if re.is_match(data.as_str()) {
-            let cleaned = data.replace(&REMOVE_CHARS_POST, "");
+            let cleaned = data.replace(REMOVE_CHARS_POST, "");
             return Some(
                 cleaned
                     .parse::<i64>()
-                    .expect(format!("Unable to parse integer value {:?}", data).as_str()),
+                    .unwrap_or_else(|_| panic!("Unable to parse integer value {:?}", data)),
             );
         }
     }
@@ -34,12 +34,11 @@ fn check_integer(data: &str) -> Option<i64> {
         let re = Regex::new(pattern).unwrap();
 
         if re.is_match(data.as_str()) {
-            let cleaned = data.replace(&REMOVE_CHARS_POST, "");
+            let cleaned = data.replace(REMOVE_CHARS_POST, "");
             return Some(
-                cleaned
+                -cleaned
                     .parse::<i64>()
-                    .expect(format!("Unable to parse integer value {:?}", data).as_str())
-                    * -1,
+                    .unwrap_or_else(|_| panic!("Unable to parse integer value {:?}", data)),
             );
         }
     }
@@ -48,17 +47,17 @@ fn check_integer(data: &str) -> Option<i64> {
 }
 
 fn check_float(data: &str) -> Option<f64> {
-    let data = data.replace(&REMOVE_CHARS_PRE, "");
+    let data = data.replace(REMOVE_CHARS_PRE, "");
 
     for pattern in PATTERNS_FLOAT_POSITIVE {
         let re = Regex::new(pattern).unwrap();
 
         if re.is_match(data.as_str()) {
-            let cleaned = data.replace(&REMOVE_CHARS_POST, "");
+            let cleaned = data.replace(REMOVE_CHARS_POST, "");
             return Some(
                 cleaned
                     .parse::<f64>()
-                    .expect(format!("Unable to parse integer value {:?}", data).as_str()),
+                    .unwrap_or_else(|_| panic!("Unable to parse integer value {:?}", data)),
             );
         }
     }
@@ -67,12 +66,11 @@ fn check_float(data: &str) -> Option<f64> {
         let re = Regex::new(pattern).unwrap();
 
         if re.is_match(data.as_str()) {
-            let cleaned = data.replace(&REMOVE_CHARS_POST, "");
+            let cleaned = data.replace(REMOVE_CHARS_POST, "");
             return Some(
-                cleaned
+                -cleaned
                     .parse::<f64>()
-                    .expect(format!("Unable to parse integer value {:?}", data).as_str())
-                    * -1_f64,
+                    .unwrap_or_else(|_| panic!("Unable to parse integer value {:?}", data)),
             );
         }
     }
@@ -99,13 +97,13 @@ pub enum Literals {
 
 impl From<&str> for Literals {
     fn from(data: &str) -> Self {
-        const TRUTHY: [&'static str; 2] = ["true", "yes"];
-        const FALSEY: [&'static str; 2] = ["false", "no"];
-        const NULLLIKE: [&'static str; 3] = ["null", "none", "nan"];
+        const TRUTHY: [&str; 2] = ["true", "yes"];
+        const FALSEY: [&str; 2] = ["false", "no"];
+        const NULLLIKE: [&str; 3] = ["null", "none", "nan"];
 
         let cleaned = data.trim().to_lowercase();
 
-        if cleaned.len() == 0 || NULLLIKE.contains(&cleaned.as_str()) {
+        if cleaned.is_empty() || NULLLIKE.contains(&cleaned.as_str()) {
             return Self::Null;
         }
 
@@ -143,7 +141,7 @@ impl From<Value> for DataValues {
             Value::Bool(b) => Self::Literal(Literals::Boolean(b)),
             Value::Number(n) => Self::Literal(refine_number(n)),
             Value::String(s) => Self::Literal(Literals::String(s)),
-            Value::Array(a) => Self::Array(a.into_iter().map(|v| Self::from(v)).collect()),
+            Value::Array(a) => Self::Array(a.into_iter().map(Self::from).collect()),
             Value::Object(m) => {
                 Self::Object(m.into_iter().map(|(k, v)| (k, Self::from(v))).collect())
             }
@@ -182,25 +180,25 @@ mod tests {
 
     #[test]
     fn data_type_parsing() {
-        const NULLS: [&'static str; 4] = ["   ", "", "null", "none"];
+        const NULLS: [&str; 4] = ["   ", "", "null", "none"];
 
         for test in NULLS {
             assert_eq!(Literals::from(test), Literals::Null);
         }
 
-        const TRUES: [&'static str; 6] = ["true", "True", "TRUE", "tRuE", "  yes  ", "YES"];
+        const TRUES: [&str; 6] = ["true", "True", "TRUE", "tRuE", "  yes  ", "YES"];
 
         for test in TRUES {
             assert_eq!(Literals::from(test), Literals::Boolean(true));
         }
 
-        const FALSES: [&'static str; 6] = ["false", "False", "FALSE", "FaLsE", "NO", "no  "];
+        const FALSES: [&str; 6] = ["false", "False", "FALSE", "FaLsE", "NO", "no  "];
 
         for test in FALSES {
             assert_eq!(Literals::from(test), Literals::Boolean(false));
         }
 
-        const INTS: [(&'static str, i64); 13] = [
+        const INTS: [(&str, i64); 13] = [
             ("1", 1),
             ("2222", 2222),
             ("1 000 000", 1_000_000),
@@ -220,7 +218,7 @@ mod tests {
             assert_eq!(Literals::from(input), Literals::Integer(result));
         }
 
-        const FLOATS: [(&'static str, f64); 6] = [
+        const FLOATS: [(&str, f64); 6] = [
             ("1.1", 1.1),
             ("213.001", 213.001),
             ("-234.5", -234.5),
@@ -241,7 +239,7 @@ mod tests {
             assert!(check_integer(test).is_none());
         }
 
-        const STRS: [&'static str; 5] = ["   yesa", "NN", "123a", "122.1x", "x 1 x 2"];
+        const STRS: [&str; 5] = ["   yesa", "NN", "123a", "122.1x", "x 1 x 2"];
 
         for test in STRS {
             assert_eq!(Literals::from(test), Literals::String(test.to_owned()));

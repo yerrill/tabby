@@ -2,6 +2,12 @@ use super::{DataValues, Literals};
 use std::collections::{HashMap, HashSet};
 
 #[derive(PartialEq, Eq, Debug)]
+pub struct SubschemaTypes {
+    pub values: HashSet<Literals>,
+    pub instance_count: usize,
+}
+
+#[derive(PartialEq, Eq, Debug)]
 pub struct ObjectProperty {
     pub value: Subschema,
     pub required: bool,
@@ -9,43 +15,42 @@ pub struct ObjectProperty {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct Subschema {
-    pub types: HashSet<Literals>,
+    pub types: Option<SubschemaTypes>,
     pub array: Option<Box<Subschema>>,
     pub object: Option<HashMap<String, ObjectProperty>>,
-    pub types_instance_count: usize,
 }
 
 impl Subschema {
     pub fn new() -> Self {
         Self {
-            types: HashSet::new(),
+            types: None,
             array: None,
             object: None,
-            types_instance_count: 0,
         }
     }
 
     pub fn from_data(data: DataValues) -> Self {
         match data {
             DataValues::Literal(t) => Self {
-                types: HashSet::from([t]),
+                types: Some(SubschemaTypes {
+                    values: HashSet::from([t]),
+                    instance_count: 1,
+                }),
                 array: None,
                 object: None,
-                types_instance_count: 1,
             },
             DataValues::Array(a) => Self {
-                types: HashSet::new(),
+                types: None,
                 array: Some(Box::new(
                     a.into_iter()
-                        .map(|i| Self::from_data(i))
-                        .reduce(|acc, e| crunch_schemas(acc, e))
+                        .map(Self::from_data)
+                        .reduce(crunch_schemas)
                         .unwrap_or(Self::new()),
                 )),
                 object: None,
-                types_instance_count: 0,
             },
             DataValues::Object(o) => Self {
-                types: HashSet::new(),
+                types: None,
                 array: None,
                 object: Some(
                     o.into_iter()
@@ -60,18 +65,24 @@ impl Subschema {
                         })
                         .collect(),
                 ),
-                types_instance_count: 0,
             },
         }
     }
 }
 
 fn crunch_schemas(uo_1: Subschema, uo_2: Subschema) -> Subschema {
-    let types = {
-        let mut set = HashSet::new();
-        set.extend(uo_1.types.into_iter());
-        set.extend(uo_2.types.into_iter());
-        set
+    let types = match (uo_1.types, uo_2.types) {
+        (Some(s1), Some(s2)) => Some(SubschemaTypes {
+            values: {
+                let mut set = s1.values;
+                set.extend(s2.values);
+                set
+            },
+            instance_count: s1.instance_count + s2.instance_count,
+        }),
+        (Some(s1), None) => Some(s1),
+        (None, Some(s2)) => Some(s2),
+        (None, None) => None,
     };
 
     let array = match (uo_1.array, uo_2.array) {
@@ -150,7 +161,6 @@ fn crunch_schemas(uo_1: Subschema, uo_2: Subschema) -> Subschema {
         types,
         array,
         object,
-        types_instance_count: uo_1.types_instance_count + uo_2.types_instance_count,
     }
 }
 
@@ -160,7 +170,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::super::{DataValues, Literals};
-    use super::{ObjectProperty, Subschema, crunch_schemas};
+    use super::{ObjectProperty, Subschema, SubschemaTypes, crunch_schemas};
 
     fn nul() -> DataValues {
         DataValues::Literal(Literals::Null)
@@ -196,8 +206,10 @@ mod tests {
         assert_eq!(
             Subschema::from_data(nul()),
             Subschema {
-                types: HashSet::from([Literals::Null]),
-                types_instance_count: 1,
+                types: Some(SubschemaTypes {
+                    values: HashSet::from([Literals::Null]),
+                    instance_count: 1
+                }),
                 ..Subschema::new()
             }
         );
@@ -206,8 +218,10 @@ mod tests {
             Subschema::from_data(arr(&[bol(true), bol(false)])),
             Subschema {
                 array: Some(Box::new(Subschema {
-                    types: HashSet::from([Literals::Boolean(true), Literals::Boolean(false)]),
-                    types_instance_count: 2,
+                    types: Some(SubschemaTypes {
+                        values: HashSet::from([Literals::Boolean(true), Literals::Boolean(false)]),
+                        instance_count: 2
+                    }),
                     ..Subschema::new()
                 })),
                 ..Subschema::new()

@@ -86,7 +86,7 @@ fn literals_to_json(types: SubschemaTypes, options: &CodegenOptions) -> Value {
     if create_const {
         json!({"const": literal_to_value(types.values.into_iter().next().unwrap())})
     } else if create_enum {
-        json!({"types": type_part, "enum": types.values.into_iter().map(literal_to_value).collect::<Vec<_>>()})
+        json!({"enum": types.values.into_iter().map(literal_to_value).collect::<Vec<_>>()})
     } else {
         json!({"type": type_part})
     }
